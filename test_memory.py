@@ -403,6 +403,15 @@ class TestRememberIntegration:
 
     @pytest.mark.asyncio
     async def test_portuguese_unicode_content(self, isolated_dirs):
+        # Seed a unicode fact so the save cycle exercises YAML round-trip
+        _save_facts([{
+            "subject": "Alice",
+            "predicate": "lives_in",
+            "object": "São Paulo",
+            "valid_from": "2025-01-01",
+            "valid_to": None,
+            "confidence": 1.0,
+        }])
         async with app.run() as agent_app:
             result = await remember(
                 context="Alice está se mudando para Nova York, saindo de São Paulo",
@@ -410,11 +419,10 @@ class TestRememberIntegration:
                 app_ctx=agent_app.context,
             )
             assert "Stored" in result or "Discarded" in result
-            if "Stored fact" in result:
-                facts = _load_facts()
-                # Verify unicode survived the round-trip
-                all_objects = " ".join(str(f.get("object", "")) for f in facts)
-                assert "Paulo" in all_objects or "Rio" in all_objects
+            # Verify the pre-seeded unicode fact survived the save cycle
+            facts = _load_facts()
+            seeded = [f for f in facts if f.get("object") == "São Paulo"]
+            assert len(seeded) >= 1, f"Unicode fact corrupted after save cycle: {facts}"
 
     @pytest.mark.asyncio
     async def test_reference_stores_url(self, isolated_dirs):

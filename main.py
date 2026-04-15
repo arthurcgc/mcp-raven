@@ -208,7 +208,7 @@ async def remember(context: str, source: str = "", app_ctx: Optional[Context] = 
                 for f in facts
             )
             if duplicate:
-                results.append(f"Skipped duplicate: {decision.subject} → {decision.predicate} → {decision.object}")
+                results.append(f"Discarded — duplicate: {decision.subject} → {decision.predicate} → {decision.object}")
                 continue
 
             # If updating, invalidate old matching facts
