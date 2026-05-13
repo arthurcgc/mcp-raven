@@ -41,7 +41,21 @@ def _parse_llm_json(raw: str, model_class):
     text = re.sub(r"^```(?:json)?\s*\n?", "", raw.strip())
     text = re.sub(r"\n?```\s*$", "", text)
 
-    data = json.loads(text)
+    if not text:
+        raise ValueError(
+            "LLM returned an empty response. The upstream provider likely errored "
+            "(check logs for the actual API error — common causes: context window "
+            "exceeded, rate limit, auth failure)."
+        )
+
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as e:
+        preview = text[:200] + ("…" if len(text) > 200 else "")
+        raise ValueError(
+            f"LLM response was not valid JSON ({e.msg} at char {e.pos}). "
+            f"Response preview: {preview!r}"
+        ) from e
 
     def _flatten(obj: dict) -> dict:
         """Flatten nested 'data' wrapper if present (Gemini quirk)."""
