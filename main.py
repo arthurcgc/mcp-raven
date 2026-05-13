@@ -101,7 +101,18 @@ def _update_memory_index(filename: str, title: str) -> None:
             f.write(f"{entry}\n")
 
 
-NOTES_DIR = Path(os.environ.get("RAVEN_NOTES_DIR", Path.home() / "notes"))
+def _resolve_notes_dirs() -> list[Path]:
+    """RAVEN_NOTES_DIRS (colon-separated, per-machine scoping) > RAVEN_NOTES_DIR > ~/notes."""
+    multi = os.environ.get("RAVEN_NOTES_DIRS")
+    if multi:
+        return [Path(p).expanduser() for p in multi.split(":") if p.strip()]
+    single = os.environ.get("RAVEN_NOTES_DIR")
+    if single:
+        return [Path(single).expanduser()]
+    return [Path.home() / "notes"]
+
+
+NOTES_DIRS = _resolve_notes_dirs()
 
 
 def _load_all_memories() -> str:
@@ -122,19 +133,25 @@ def _load_all_memories() -> str:
             if content:
                 parts.append(f"=== memory/{md_file.name} ===\n{content}")
 
-    # Load all notes
-    if NOTES_DIR.exists():
-        for md_file in sorted(NOTES_DIR.rglob("*.md")):
-            # Skip obsidian internals and files already loaded via MEMORY_DIR symlink
+    # Load notes from each configured root (de-duped by resolved path)
+    seen: set[Path] = set()
+    memory_root = MEMORY_DIR.resolve() if MEMORY_DIR.exists() else None
+    for notes_dir in NOTES_DIRS:
+        if not notes_dir.exists():
+            continue
+        for md_file in sorted(notes_dir.rglob("*.md")):
             if ".obsidian" in md_file.parts:
                 continue
             try:
                 resolved = md_file.resolve()
-                if MEMORY_DIR.exists() and str(resolved).startswith(str(MEMORY_DIR.resolve())):
+                if resolved in seen:
                     continue
+                if memory_root and str(resolved).startswith(str(memory_root)):
+                    continue
+                seen.add(resolved)
                 content = md_file.read_text().strip()
                 if content:
-                    relative = md_file.relative_to(NOTES_DIR)
+                    relative = md_file.relative_to(notes_dir)
                     parts.append(f"=== notes/{relative} ===\n{content}")
             except (OSError, ValueError):
                 continue
